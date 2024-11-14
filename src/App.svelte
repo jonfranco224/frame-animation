@@ -23,24 +23,24 @@
 
 	const loadBlobToCanvas = (blobCtx, blobCanvas, blob) =>
     new Promise((resolve, reject) => {
-        if (!blobCanvas || !blob) return reject("Invalid input.");
+			if (!blobCanvas || !blob) return reject("Invalid input.");
 
-        // Check if this blob already has an associated URL
-        let objectURL = blobURLCache.get(blob);
-        if (!objectURL) {
-            // Create a new object URL and cache it
-            objectURL = URL.createObjectURL(blob);
-            blobURLCache.set(blob, objectURL);
-        }
+			// Check if this blob already has an associated URL
+			let objectURL = blobURLCache.get(blob);
+			if (!objectURL) {
+				// Create a new object URL and cache it
+				objectURL = URL.createObjectURL(blob);
+				blobURLCache.set(blob, objectURL);
+			}
 
-        const img = new Image();
-        img.onload = () => {
-            setImageSmooth();
-            blobCtx.drawImage(img, 0, 0);
-            resolve();
-        };
-        img.onerror = () => reject("Failed to load Blob.");
-        img.src = objectURL;
+			const img = new Image();
+			img.onload = () => {
+				setImageSmooth();
+				blobCtx.drawImage(img, 0, 0);
+				resolve();
+			};
+			img.onerror = () => reject("Failed to load Blob.");
+			img.src = objectURL;
     });
 	
 	let tempCanvas
@@ -317,8 +317,18 @@
     const currCol = state.activeTimeline.col;
 
     // Revoke the Object URL of the frame being removed
-    if (row[currCol]?.thumbnailURL) {
-      URL.revokeObjectURL(row[currCol].thumbnailURL);
+    const frameToRemove = row[currCol];
+    if (frameToRemove) {
+			// Revoke the thumbnail URL
+			if (frameToRemove.thumbnailURL) {
+				URL.revokeObjectURL(frameToRemove.thumbnailURL);
+			}
+			// Revoke the blob URL (if applicable and stored in blobURLCache)
+			const blobObjectURL = blobURLCache.get(frameToRemove.blob);
+			if (blobObjectURL) {
+				URL.revokeObjectURL(blobObjectURL);
+				blobURLCache.delete(frameToRemove.blob); // Remove it from the cache
+			}
     }
 
     // Shift all frames after the current column to the left
@@ -345,6 +355,13 @@
 
     // Update the active shot based on the new timeline position
     state.activeShot = state.timeline[state.activeTimeline.row][state.activeTimeline.col];
+
+		// Clear onion skin canvases
+    const onionCanvases = document.querySelectorAll('[id^="onion-"]');
+    onionCanvases.forEach((target) => {
+			const ctx = target.getContext('2d');
+			if (ctx) ctx.clearRect(0, 0, target.width, target.height);
+    });
 
     // Clear the canvas if no active frame exists
     if (!state.activeShot) {
@@ -507,6 +524,7 @@
 			if (i === 0) continue; // Skip the current frame
 
 			const frameIndex = state.activeTimeline.col + i;
+
 			if (frameIndex < 0 || frameIndex >= state.timeline[0].length) continue; // Skip invalid frames
 
 			const targetCanvas = document.querySelector(`#onion-${i}-onion`);
@@ -681,7 +699,7 @@
 				{#if state.onionSkinEnabled}
 					{#each Array(state.onionSkinFramesAfter).fill(0) as _, index}
 						<canvas
-							id="onion-{0 - index}-onion"
+							id="onion-{0 - index - 1}-onion"
 							class="absolute top-0 left-0 w-full h-full pointer-events-none bg-transparent"
 							style="width: {state.width / DPR}px; height: {state.height / DPR}px; opacity: {0.5 - index * 0.1};"
 							width={state.width}
