@@ -1,0 +1,55 @@
+:root {
+  --dark-gray: rgb(47, 47, 47);
+  --medium-gray: rgb(144, 144, 144);
+  --dark: rgb(37, 37, 37)
+}
+
+* {
+  box-sizing: border-box;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+html {
+  font-weight: 400;
+  letter-spacing: -.05px;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  font-smoothing: antialiased;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+}
+
+a {
+  text-decoration: none;
+}
+
+html, body {
+  height: 100%;
+  min-height: 100%;
+  max-height: 100%;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -o-user-select: none;
+  user-select: none;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont,
+    “Segoe UI”, “Roboto”, “Oxygen”,
+    “Ubuntu”, “Cantarell”, “Fira Sans”,
+    “Droid Sans”, “Helvetica Neue”, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 6px;
+  background-color: rgba(25,25,25);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(47,47,47);
+}
