@@ -237,41 +237,43 @@
 	}
 
 	const onPointerStart = (e) => {
+		const clientX = e?.clientX || e.touches[0].clientX
+		const clientY = e?.clientY || e.touches[0].clientY
     const rect = canvas.getBoundingClientRect()
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
 
-    const normalizedX = (e.clientX - rect.left) * scaleX
-    const normalizedY = (e.clientY - rect.top) * scaleY
+    const normalizedX = (clientX - rect.left) * scaleX
+    const normalizedY = (clientY - rect.top) * scaleY
 
-    if (e.pointerType === 'pen' || e.pointerType === 'touch' || e.pointerType === 'mouse') {
-			isDrawing = true
+    isDrawing = true
 
-			// Begin a new path on the canvas
-			ctx.beginPath()
-			ctx.moveTo(normalizedX, normalizedY)
+		// Begin a new path on the canvas
+		ctx.beginPath()
+		ctx.moveTo(normalizedX, normalizedY)
 
-			// Set line style
-			ctx.lineCap = "round" // Round line caps
-			ctx.lineJoin = "round" // Round line caps
-			ctx.strokeStyle = "black"
-			ctx.lineWidth = 30
+		// Set line style
+		ctx.lineCap = "round" // Round line caps
+		ctx.lineJoin = "round" // Round line caps
+		ctx.strokeStyle = "black"
+		ctx.lineWidth = 30
 
-			// Draw a point immediately on pointer down
-			ctx.lineTo(normalizedX, normalizedY)
-			ctx.stroke()
-    }
+		// Draw a point immediately on pointer down
+		ctx.lineTo(normalizedX, normalizedY)
+		ctx.stroke()
 	}
 
 	const onPointerMove = (e) => {
     if (!isDrawing) return;
 
+		const clientX = e?.clientX || e.touches[0].clientX
+		const clientY = e?.clientY || e.touches[0].clientY
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
-    const normalizedX = (e.clientX - rect.left) * scaleX;
-    const normalizedY = (e.clientY - rect.top) * scaleY;
+    const normalizedX = (clientX - rect.left) * scaleX;
+    const normalizedY = (clientY - rect.top) * scaleY;
 
     // Draw a line from the last point to the current point
     ctx.lineTo(normalizedX, normalizedY);
@@ -308,6 +310,13 @@
 		ctx.drawImage(offscreenCanvas, 0, 0);
 
     if (state.onionSkinEnabled) {
+			// Clear onion skin canvases
+			const onionCanvases = document.querySelectorAll('[id^="onion-"]');
+			onionCanvases.forEach((target) => {
+				const ctx = target.getContext('2d');
+				if (ctx) ctx.clearRect(0, 0, target.width, target.height);
+			});
+
       await updateOnionSkinCanvases();
     }
 	};
@@ -356,12 +365,7 @@
     // Update the active shot based on the new timeline position
     state.activeShot = state.timeline[state.activeTimeline.row][state.activeTimeline.col];
 
-		// Clear onion skin canvases
-    const onionCanvases = document.querySelectorAll('[id^="onion-"]');
-    onionCanvases.forEach((target) => {
-			const ctx = target.getContext('2d');
-			if (ctx) ctx.clearRect(0, 0, target.width, target.height);
-    });
+		
 
     // Clear the canvas if no active frame exists
     if (!state.activeShot) {
@@ -385,7 +389,7 @@
 
     // Update the state with the modified row
     state.timeline[state.activeTimeline.row] = row; // This triggers reactivity
-		setActiveTimeline(state.activeTimeline.row, state.activeTimeline.col + 1)
+		setActiveTimeline(state.activeTimeline.row, state.activeTimeline.col + 1, true)
 	};
 
 	const push = (dir) => {
@@ -487,6 +491,7 @@
 	let programmaticScroll = false
 	
 	const setActiveTimeline = (row, col, trigger) => {
+		if (row === state.activeTimeline.row && col === state.activeTimeline.col) return
 		// Update active timeline state
 		state.activeTimeline.row = row
 		state.activeTimeline.col = col
@@ -500,11 +505,12 @@
 				behavior: 'instant'
 			})
 			programmaticScroll = false
-			
 		}
 	};
 
 	const handleTimelineScroll = (e) => {
+		e.preventDefault()
+
 		if (programmaticScroll) return
 
 		// Calculate the current column based on scroll position
@@ -644,17 +650,72 @@
 			wasmURL: `${baseURL}/ffmpeg-core.wasm`,
 		});
 	};
+
+	let lastTap = 0; // Tracks the time of the last tap
+  const doubleTapThreshold = 300; // Maximum time interval for a double-tap in milliseconds
+
+  const doubleClick = (e) => {
+    const currentTime = new Date().getTime();
+    const timeSinceLastTap = currentTime - lastTap;
+		
+		// Double-tap detected
+    if (timeSinceLastTap < doubleTapThreshold && timeSinceLastTap > 0) {
+      e.preventDefault()
+    }
+
+    lastTap = currentTime;
+  }
+
+	let isScrolling = false;
+	let startTouchX = 0;
+	let startTouchY = 0;
+	const SCROLL_THRESHOLD = 10; // Adjust the threshold as needed
+
+	function handleTouchStart(event) {
+		// Record the initial touch position
+		startTouchX = event?.clientX || event.touches[0].clientX;
+		startTouchY = event?.clientY || event.touches[0].clientY;
+		isScrolling = false; // Reset scrolling flag
+	}
+
+	function handleTouchMove(event) {
+		const touchX = event?.clientX || event.touches[0].clientX;
+		const touchY = event?.clientY || event.touches[0].clientY;
+
+		// Calculate the movement
+		const deltaX = Math.abs(touchX - startTouchX);
+		const deltaY = Math.abs(touchY - startTouchY);
+
+		// If movement exceeds threshold, treat as scroll
+		if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
+			isScrolling = true;
+		}
+	}
+
+	function handleTouchEnd(event, cellIndex) {
+		if (isScrolling) return // Touchend ignored due to scroll-like movement
+
+
+		if (event.target.dataset?.cellindex) {
+			const cellIndex = parseInt(event.target.dataset?.cellindex)
+			setActiveTimeline(state.activeTimeline.row, cellIndex, true)
+		}
+	}
 </script>
 
-<main class="flex flex-col h-full">
+<main
+	class="flex flex-col h-full" 
+	on:touchstart={doubleClick}
+	on:touchend={(e) => e.preventDefault()}
+>
 	<div class="flex justify-between">
 		<div class="w-[100px]"></div>
-		<div class="flex relative">
-			<button on:click={() => { remove() }} class="bg-[rgb(47,47,47)] px-3 w-[200px] flex items-center justify-center">
+		<div class="flex-1 flex justify-center relative">
+			<button on:mouseup={() => { remove() }} class="bg-[rgb(47,47,47)] px-3 w-full max-w-[200px] flex items-center justify-center">
 				<img class="icon" width="18" height="18" src="/img/delete.svg"/>
 			</button>
 			<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
-			<button on:click={() => { insert() }} class="bg-[rgb(47,47,47)] px-3 w-[200px] flex items-center justify-center">
+			<button on:mouseup={() => { insert() }} class="bg-[rgb(47,47,47)] px-3 w-full max-w-[200px] flex items-center justify-center">
 				<img class="icon" width="20" height="20" src="/img/insert.svg"/>
 			</button>
 		</div>
@@ -671,6 +732,12 @@
 	
 	<div
 		class="w-full h-full overflow-hidden relative touch-none bg-[#333]"
+		on:touchstart={onPointerStart}
+		on:touchmove={onPointerMove}
+		on:touchend={onPointerEnd}
+		on:mousedown={onPointerStart}
+		on:mousemove={onPointerMove}
+		on:mouseup={onPointerEnd}
 		on:wheel={handleWheel}
 		bind:this={workspaceRef}
 	>
@@ -710,9 +777,6 @@
 				<canvas
 					class="absolute top-0 left-0 w-full h-full"
 					style="width: {state.width / DPR}px; height: {state.height / DPR}px;"
-					on:pointerdown={onPointerStart}
-					on:pointermove={onPointerMove}
-					on:pointerup={onPointerEnd}
 					bind:this={canvas}
 					width={state.width}
 					height={state.height}
@@ -731,28 +795,33 @@
 			</div>
 		</div>
 	</div>
-	<div>
+
+	<div
+		on:touchstart={handleTouchStart}
+		on:touchmove={handleTouchMove}
+		on:touchend={handleTouchEnd}
+		on:mousedown={handleTouchStart}
+		on:mousemove={handleTouchMove}
+		on:mouseup={handleTouchEnd}
+	>
 		<div class="flex bg-[rgb(37,37,37)] pb-9 relative">
-			<!-- {#if state.isPlaying}
-				<div on:pointerup={() => { stopAnimation() }} class='z-[100] absolute top-0 left-0 w-full h-full bg-[transparent]'></div>
-			{/if} -->
 			<div class="text-white bg-darkgray min-w-[100px] max-w-[100px] flex">
 				<p class="flex items-center pl-3 text-[11px]"><b>Layer 1</b></p>
 			</div>
-			<div bind:this={timelineRef} on:scroll={handleTimelineScroll} class="hide-scroll overflow-x-scroll overflow-y-hidden relative {state.isPlaying ? 'pointer-events-none' : ''} border-x">
+			<!-- svelte-ignore a11y-click-events-have-key-events -->
+			<div
+				bind:this={timelineRef}
+				on:scroll={handleTimelineScroll}
+				class="hide-scroll overflow-x-scroll overflow-y-hidden relative {state.isPlaying ? 'pointer-events-none' : ''} border-x">
 				<!-- blue line -->
 				<!-- <div style="left: 50%" class="z-50 w-[2px] h-[56px] bg-[rgb(52,152,219)] fixed pointer-events-none" /> -->
-
 				<!-- button row -->
 				<div class="relative min-w-max pl-[calc(50%+1px)] pr-[calc(50%)]">
 					<div class="flex flex-col gap-[1px]">
 						{#each state.timeline as row, rowIndex}
 							<div class="flex flex-nowrap">
 								{#each row as cell, cellIndex}
-									<button
-									on:click={() => { setActiveTimeline(state.activeTimeline.row, cellIndex, true) }}
-										class="min-w-14 h-14 flex justify-center"
-									>
+									<button data-cellindex={cellIndex} class="min-w-14 h-14 flex justify-center">
 										<div
 											class="w-[calc(100%-1.5px)] h-full pointer-events-none rounded-[1px] relative
 											{cell !== null ? 'bg-mediumgray' : 'bg-darkgray'}
@@ -775,7 +844,7 @@
 				</div>
 			</div>
 			<div class="flex min-w-[100px] max-w-[100px]">
-				<button on:pointerup={toggleAnimation} on:touchmove={(e) => { e.preventDefault() }} class="bg-darkgray w-full text-white flex items-center justify-center">
+				<button on:touchend={toggleAnimation} on:mouseup={toggleAnimation} class="bg-darkgray w-full text-white flex items-center justify-center">
 					{#if !state.isPlaying}
 						<img class="icon" width="20" height="20" src="/img/play.svg"/>
 					{:else}
