@@ -59,6 +59,8 @@
   let ffmpeg
   let message = ''
 
+	let debug = ''
+
 	let state = {
 		width: 500 * DPR,
 		height: 500 * DPR,
@@ -140,7 +142,7 @@
     const { clientWidth: workspaceWidth, clientHeight: workspaceHeight } = workspaceRef;
     
 		// Define padding value
-    const padding = 20 // Adjust this value as needed
+    const padding = 0 // Adjust this value as needed
   
     // Calculate the available space with padding
     const availableWidth = workspaceWidth - padding * 2
@@ -237,6 +239,14 @@
 	}
 
 	const onPointerStart = (e) => {
+		// direct for touch
+		// stylus for pencil
+		
+		const touchType = e?.changedTouches?.[0]?.touchType || 'stylus'
+		debug = touchType
+
+		if (touchType !== 'stylus') return
+
 		const clientX = e?.clientX || e.touches[0].clientX
 		const clientY = e?.clientY || e.touches[0].clientY
     const rect = canvas.getBoundingClientRect()
@@ -256,7 +266,7 @@
 		ctx.lineCap = "round" // Round line caps
 		ctx.lineJoin = "round" // Round line caps
 		ctx.strokeStyle = "black"
-		ctx.lineWidth = 30
+		ctx.lineWidth = 15
 
 		// Draw a point immediately on pointer down
 		ctx.lineTo(normalizedX, normalizedY)
@@ -278,65 +288,64 @@
     // Draw a line from the last point to the current point
     ctx.lineTo(normalizedX, normalizedY);
     ctx.stroke();
-	};
+	}
 
 	const onPointerEnd = async (e) => {
-    if (!isDrawing) return;
-    isDrawing = false;
-    ctx.closePath();
+    if (!isDrawing) return
+    isDrawing = false
+    ctx.closePath()
 		await processFrame()
-    
-	};
+	}
 	
 	// TIMELINE - EDITING
 
 	const printColumn = async () => {
-    offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+    offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height)
 
 		// For every layer in this frame...
     for (const row of state.timeline) {
-			const cell = row[state.activeTimeline.col];
+			const cell = row[state.activeTimeline.col]
 			if (cell?.blob) {
-				tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-				await loadBlobToCanvas(tempCtx, tempCanvas, cell.blob); // Convert blob to a temp canvas you can draw
+				tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height)
+				await loadBlobToCanvas(tempCtx, tempCanvas, cell.blob) // Convert blob to a temp canvas you can draw
 				setImageSmooth()
-				offscreenCtx.drawImage(tempCanvas, 0, 0); // draw the temp ctx for this layer onto the off screen canvas
+				offscreenCtx.drawImage(tempCanvas, 0, 0) // draw the temp ctx for this layer onto the off screen canvas
 			}
     }
 
     // Draw the accumulated offscreenCanvas onto the primary canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     setImageSmooth()
-		ctx.drawImage(offscreenCanvas, 0, 0);
+		ctx.drawImage(offscreenCanvas, 0, 0)
 
     if (state.onionSkinEnabled) {
 			// Clear onion skin canvases
-			const onionCanvases = document.querySelectorAll('[id^="onion-"]');
+			const onionCanvases = document.querySelectorAll('[id^="onion-"]')
 			onionCanvases.forEach((target) => {
-				const ctx = target.getContext('2d');
-				if (ctx) ctx.clearRect(0, 0, target.width, target.height);
-			});
+				const ctx = target.getContext('2d')
+				if (ctx) ctx.clearRect(0, 0, target.width, target.height)
+			})
 
-      await updateOnionSkinCanvases();
+      await updateOnionSkinCanvases()
     }
-	};
+	}
 
 	const remove = () => {
-    const row = [...state.timeline[state.activeTimeline.row]]; // Create a shallow copy
-    const currCol = state.activeTimeline.col;
+    const row = [...state.timeline[state.activeTimeline.row]] // Create a shallow copy
+    const currCol = state.activeTimeline.col
 
     // Revoke the Object URL of the frame being removed
-    const frameToRemove = row[currCol];
+    const frameToRemove = row[currCol]
     if (frameToRemove) {
 			// Revoke the thumbnail URL
 			if (frameToRemove.thumbnailURL) {
-				URL.revokeObjectURL(frameToRemove.thumbnailURL);
+				URL.revokeObjectURL(frameToRemove.thumbnailURL)
 			}
 			// Revoke the blob URL (if applicable and stored in blobURLCache)
-			const blobObjectURL = blobURLCache.get(frameToRemove.blob);
+			const blobObjectURL = blobURLCache.get(frameToRemove.blob)
 			if (blobObjectURL) {
-				URL.revokeObjectURL(blobObjectURL);
-				blobURLCache.delete(frameToRemove.blob); // Remove it from the cache
+				URL.revokeObjectURL(blobObjectURL)
+				blobURLCache.delete(frameToRemove.blob) // Remove it from the cache
 			}
     }
 
@@ -459,14 +468,14 @@
     // Define a function to play one frame
     const playFrame = () => {
 			state.activeTimeline.col = frameIndex; // Update the active column
-			printColumn(); // Render the current column using the existing printColumn function
-			frameIndex = (frameIndex + 1) % state.timeline[0].length; // Move to the next frame or loop back to the start
+			// frameIndex = (frameIndex + 1) % state.timeline[0].length; // Move to the next frame or loop back to the start
+			frameIndex = (frameIndex + 1) % 6; // Move to the next frame or loop back to the start
 			setActiveTimeline(state.activeTimeline.row, frameIndex, true)
 
 			// Stop if no frames exist after looping back to the start
-			if (frameIndex === 0 && !state.timeline.some(row => row.some(cell => cell?.blob))) {
-				stopAnimation();
-			}
+			// if (frameIndex === 0 && !state.timeline.some(row => row.some(cell => cell?.blob))) {
+			// 	stopAnimation();
+			// }
     };
     
     playFrame(); // Immediately play the first frame
@@ -564,7 +573,7 @@
 
 	// EXPORT PROCESSING
 
-	const generateRandomVideo = async (videoName) => {		
+	const generateRandomVideo = async (videoName) => {	
 		// Determine the last column with any content
 		const lastFrameIndex = state.timeline[0].length - 1;
 		let maxColumn = 0;
@@ -671,14 +680,14 @@
 	let startTouchY = 0;
 	const SCROLL_THRESHOLD = 10; // Adjust the threshold as needed
 
-	function handleTouchStart(event) {
+	const handleTouchStart = (event) => {
 		// Record the initial touch position
 		startTouchX = event?.clientX || event.touches[0].clientX;
 		startTouchY = event?.clientY || event.touches[0].clientY;
 		isScrolling = false; // Reset scrolling flag
 	}
 
-	function handleTouchMove(event) {
+	const handleTouchMove = (event) => {
 		const touchX = event?.clientX || event.touches[0].clientX;
 		const touchY = event?.clientY || event.touches[0].clientY;
 
@@ -692,9 +701,8 @@
 		}
 	}
 
-	function handleTouchEnd(event, cellIndex) {
+	const handleTouchEnd = (event, cellIndex) => {
 		if (isScrolling) return // Touchend ignored due to scroll-like movement
-
 
 		if (event.target.dataset?.cellindex) {
 			const cellIndex = parseInt(event.target.dataset?.cellindex)
@@ -708,20 +716,33 @@
 	on:touchstart={doubleClick}
 	on:touchend={(e) => e.preventDefault()}
 >
-	<div class="flex justify-between">
-		<div class="w-[100px]"></div>
-		<div class="flex-1 flex justify-center relative">
-			<button on:mouseup={() => { remove() }} class="bg-[rgb(47,47,47)] px-3 w-full max-w-[200px] flex items-center justify-center">
-				<img class="icon" width="18" height="18" src="/img/delete.svg"/>
-			</button>
+	<div class="flex justify-between absolute z-10 w-full">
+		<button
+			class="p-5 flex items-center justify-center"
+			on:mouseup="{() => {
+				
+			}}"
+			on:touchend="{() => {
+				
+			}}"
+		>
+			<img class="icon" width="25" height="25" src="/img/back.svg"/>
+		</button>
+		<div class="flex justify-center relative w-[200px] overflow-hidden">
+			<!-- <button on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
+				<img class="icon" width="25" height="25" src="/img/delete.svg"/>
+			</button> -->
 			<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
-			<button on:mouseup={() => { insert() }} class="bg-[rgb(47,47,47)] px-3 w-full max-w-[200px] flex items-center justify-center">
-				<img class="icon" width="20" height="20" src="/img/insert.svg"/>
-			</button>
+			<!-- <button on:mouseup={() => { insert() }} on:touchend={() => { insert() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
+				<img class="icon" width="25" height="25" src="/img/insert.svg"/>
+			</button> -->
 		</div>
 		<button
-			class="w-[100px] bg-[rgb(47,47,47)] p-3 flex items-center justify-center"
-			on:click="{() => {
+			class="p-5 flex items-center justify-center"
+			on:mouseup="{() => {
+				generateRandomVideo('test.mp4')
+			}}"
+			on:touchend="{() => {
 				generateRandomVideo('test.mp4')
 			}}"
 		>
@@ -731,7 +752,7 @@
 	<!-- <div class=" flex justify-center items-center flex-1 bg-[rgb(37,37,37)] hide-scroll"> -->
 	
 	<div
-		class="w-full h-full overflow-hidden relative touch-none bg-[#333]"
+		class="w-full h-full overflow-hidden relative touch-none"
 		on:touchstart={onPointerStart}
 		on:touchmove={onPointerMove}
 		on:touchend={onPointerEnd}
@@ -741,6 +762,7 @@
 		on:wheel={handleWheel}
 		bind:this={workspaceRef}
 	>
+		<div class="absolute top-0 left-0">{debug}</div>
 		<div
 			style="
 				transform: translate({state.workspace.translate.x}px, {state.workspace.translate.y}px) scale({state.workspace.scale}) rotate({state.workspace.rotate}deg);
@@ -803,35 +825,58 @@
 		on:mousedown={handleTouchStart}
 		on:mousemove={handleTouchMove}
 		on:mouseup={handleTouchEnd}
+		class="absolute w-full bottom-0 mb-9"
 	>
-		<div class="flex bg-[rgb(37,37,37)] pb-9 relative">
-			<div class="text-white bg-darkgray min-w-[100px] max-w-[100px] flex">
+		<div class="flex flex-col relative">
+			<!-- <div class="text-white min-w-[100px] max-w-[100px] flex">
 				<p class="flex items-center pl-3 text-[11px]"><b>Layer 1</b></p>
-			</div>
+			</div> -->
 			<!-- svelte-ignore a11y-click-events-have-key-events -->
+			<div class="relative flex justify-end">
+				<button on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="py-4 px-4 flex items-center text-white gap-2">
+					<img class="icon min-w-[25px]" width="25" height="25" src="/img/delete.svg"/>
+					<!-- <p class="text-[14px]">Delete</p> -->
+				</button>
+				<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
+				<button on:mouseup={() => { insert() }} on:touchend={() => { insert() }} class="px-4 flex items-center text-white gap-2">
+					<img class="icon min-w-[25px]" width="25" height="25" src="/img/insert.svg"/>
+					<!-- <p class="text-[14px]">Insert</p> -->
+				</button>
+				<button on:touchend={toggleAnimation} on:mouseup={toggleAnimation} class="px-8 text-white flex items-center justify-center">
+					{#if !state.isPlaying}
+						<img class="icon" width="25" height="25" src="/img/play.svg"/>
+					{:else}
+						<img class="icon" width="25" height="25" src="/img/pause.svg"/>
+					{/if}
+				</button>
+			</div>
+			
 			<div
 				bind:this={timelineRef}
 				on:scroll={handleTimelineScroll}
-				class="hide-scroll overflow-x-scroll overflow-y-hidden relative {state.isPlaying ? 'pointer-events-none' : ''} border-x">
+				class="hide-scroll overflow-x-scroll overflow-y-visible relative {state.isPlaying ? 'pointer-events-none' : ''}">
 				<!-- blue line -->
 				<!-- <div style="left: 50%" class="z-50 w-[2px] h-[56px] bg-[rgb(52,152,219)] fixed pointer-events-none" /> -->
 				<!-- button row -->
+				
 				<div class="relative min-w-max pl-[calc(50%+1px)] pr-[calc(50%)]">
 					<div class="flex flex-col gap-[1px]">
 						{#each state.timeline as row, rowIndex}
 							<div class="flex flex-nowrap">
 								{#each row as cell, cellIndex}
-									<button data-cellindex={cellIndex} class="min-w-14 h-14 flex justify-center">
+									<button data-cellindex={cellIndex} class="min-w-14 h-14 flex justify-center rounded-[6px] pr-[2px] relative">		
 										<div
-											class="w-[calc(100%-1.5px)] h-full pointer-events-none rounded-[1px] relative
-											{cell !== null ? 'bg-mediumgray' : 'bg-darkgray'}
-											{state.activeTimeline.col === cellIndex ? 'border-[2px] border-[rgb(52,152,219)]' : 'border-[2px] border-[transparent]'}"
+											style="box-shadow: inset 0px 0px 0px 0px rgba(255,255,255,0.8), inset 0px 0px 0px 1px rgba(0,0,0,0.8);"
+											class="{cell !== null ? 'bg-white' : 'bg-[rgba(0,0,0,0.25)]'} w-[calc(100%-0px)] h-full pointer-events-none relative rounded-[6px] overflow-hidden
+											{state.activeTimeline.col === cellIndex ? 'border-[1px] border-[rgb(52,152,219)]' : 'border-[1px] border-[#fff]'}"
 										>
-										<p class="bg-[rgb(47,47,47)] rounded-[1px] absolute top-0 left-0 z-20 text-[10px] px-2 py-[2px] text-left text-[rgba(255,255,255,.5)]">{cellIndex + 1}</p>
+										<p class="
+											{state.activeTimeline.col === cellIndex ? 'bg-[rgb(52,152,219)]' : 'bg-[rgba(0,0,0,1)]'} 
+											absolute top-0 left-0 z-20 text-[9px] px-1 py-[1px] text-left text-[rgba(255,255,255,1)] rounded-br-[2px]">{cellIndex + 1}</p>
 										{#if cell?.thumbnailURL}
 											<img
 												src="{cell.thumbnailURL}"
-												class=" absolute top-0 left-0 w-full h-full object-cover rounded-[1px]"
+												class=" absolute top-0 left-0 w-full h-full object-cover "
 												alt="Thumbnail"
 											/>
 										{/if}
@@ -843,15 +888,15 @@
 					</div>
 				</div>
 			</div>
-			<div class="flex min-w-[100px] max-w-[100px]">
-				<button on:touchend={toggleAnimation} on:mouseup={toggleAnimation} class="bg-darkgray w-full text-white flex items-center justify-center">
+			<!-- <div class="flex min-w-[100px] max-w-[100px]">
+				<button on:touchend={toggleAnimation} on:mouseup={toggleAnimation} class="w-full text-white flex items-center justify-center">
 					{#if !state.isPlaying}
-						<img class="icon" width="20" height="20" src="/img/play.svg"/>
+						<img class="icon" width="25" height="25" src="/img/play.svg"/>
 					{:else}
-						<img class="icon" width="20" height="20" src="/img/pause.svg"/>
+						<img class="icon" width="25" height="25" src="/img/pause.svg"/>
 					{/if}
 				</button>
-			</div>
+			</div> -->
 		</div>
 	</div>
 </main>

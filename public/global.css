@@ -1,6 +1,6 @@
 :root {
-  --dark-gray: rgb(47, 47, 47);
-  --medium-gray: rgb(144, 144, 144);
+  --dark-gray: rgb(19, 20, 23);
+  --medium-gray: rgb(45, 46, 50);
   --dark: rgb(37, 37, 37)
 }
 
@@ -54,5 +54,9 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(47,47,47);
+  background-color: rgba(45,46,50);
+}
+
+.custom-shadow {
+  box-shadow: 0 0 0 1px rgba(56,57,60,1)
 }
