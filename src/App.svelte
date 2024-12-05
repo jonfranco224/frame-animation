@@ -241,11 +241,13 @@
 	const onPointerStart = (e) => {
 		// direct for touch
 		// stylus for pencil
+
+		if (state.isPlaying) return
 		
 		const touchType = e?.changedTouches?.[0]?.touchType || 'stylus'
 		debug = touchType
 
-		if (touchType !== 'stylus') return
+		// if (touchType !== 'stylus') return
 
 		const clientX = e?.clientX || e.touches[0].clientX
 		const clientY = e?.clientY || e.touches[0].clientY
@@ -274,7 +276,8 @@
 	}
 
 	const onPointerMove = (e) => {
-    if (!isDrawing) return;
+		if (state.isPlaying) return
+    if (!isDrawing) return
 
 		const clientX = e?.clientX || e.touches[0].clientX
 		const clientY = e?.clientY || e.touches[0].clientY
@@ -331,6 +334,8 @@
 	}
 
 	const remove = () => {
+		if (state.isPlaying) return
+
     const row = [...state.timeline[state.activeTimeline.row]] // Create a shallow copy
     const currCol = state.activeTimeline.col
 
@@ -385,6 +390,8 @@
 	};
 
 	const insert = () => {
+		if (state.isPlaying) return
+
     const row = [...state.timeline[state.activeTimeline.row]]; // Create a shallow copy
     const currCol = state.activeTimeline.col;
 
@@ -574,6 +581,8 @@
 	// EXPORT PROCESSING
 
 	const generateRandomVideo = async (videoName) => {	
+		if (state.isPlaying) return
+
 		// Determine the last column with any content
 		const lastFrameIndex = state.timeline[0].length - 1;
 		let maxColumn = 0;
@@ -762,7 +771,7 @@
 		on:wheel={handleWheel}
 		bind:this={workspaceRef}
 	>
-		<div class="absolute top-0 left-0">{debug}</div>
+		<!-- <div class="absolute top-0 left-0">{debug}</div> -->
 		<div
 			style="
 				transform: translate({state.workspace.translate.x}px, {state.workspace.translate.y}px) scale({state.workspace.scale}) rotate({state.workspace.rotate}deg);
@@ -832,23 +841,36 @@
 				<p class="flex items-center pl-3 text-[11px]"><b>Layer 1</b></p>
 			</div> -->
 			<!-- svelte-ignore a11y-click-events-have-key-events -->
-			<div class="relative flex justify-end">
-				<button on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="py-4 px-4 flex items-center text-white gap-2">
-					<img class="icon min-w-[25px]" width="25" height="25" src="/img/delete.svg"/>
-					<!-- <p class="text-[14px]">Delete</p> -->
-				</button>
-				<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
-				<button on:mouseup={() => { insert() }} on:touchend={() => { insert() }} class="px-4 flex items-center text-white gap-2">
-					<img class="icon min-w-[25px]" width="25" height="25" src="/img/insert.svg"/>
-					<!-- <p class="text-[14px]">Insert</p> -->
-				</button>
-				<button on:touchend={toggleAnimation} on:mouseup={toggleAnimation} class="px-8 text-white flex items-center justify-center">
-					{#if !state.isPlaying}
-						<img class="icon" width="25" height="25" src="/img/play.svg"/>
-					{:else}
-						<img class="icon" width="25" height="25" src="/img/pause.svg"/>
-					{/if}
-				</button>
+			<div class="relative flex">
+				<div class="flex justify-start flex-1">
+					
+				</div>
+				<div class="flex justify-center flex-1">
+					<div class="flex justify-start flex-1">
+					
+					</div>
+					<button on:touchend={toggleAnimation} on:mouseup={toggleAnimation} class="px-8 text-white flex items-center justify-center">
+						{#if !state.isPlaying}
+							<img class="icon" width="25" height="25" src="/img/play.svg"/>
+						{:else}
+							<img class="icon" width="25" height="25" src="/img/pause.svg"/>
+						{/if}
+					</button>
+					<div class="flex justify-end flex-1">
+						<button on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="py-4 px-4 flex items-center text-white gap-2">
+							<img class="icon min-w-[25px]" width="25" height="25" src="/img/delete.svg"/>
+							<!-- <p class="text-[14px]">Delete</p> -->
+						</button>
+						<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
+						<button on:mouseup={() => { insert() }} on:touchend={() => { insert() }} class="px-4 flex items-center text-white gap-2">
+							<img class="icon min-w-[25px]" width="25" height="25" src="/img/insert.svg"/>
+							<!-- <p class="text-[14px]">Insert</p> -->
+						</button>
+					</div>
+				</div>
+				<div class="flex justify-end flex-1">
+					
+				</div>
 			</div>
 			
 			<div
