@@ -845,18 +845,17 @@
 				<div class="flex justify-start flex-1">
 					
 				</div>
-				<div class="flex justify-center flex-1">
-					<div class="flex justify-start flex-1">
-					
-					</div>
+				<div class="flex justify-center">
 					<button on:touchend={toggleAnimation} on:mouseup={toggleAnimation} class="px-8 text-white flex items-center justify-center">
 						{#if !state.isPlaying}
-							<img class="icon" width="25" height="25" src="/img/play.svg"/>
+							<img class="icon min-w-[25px]" width="25" height="25" src="/img/play.svg"/>
 						{:else}
-							<img class="icon" width="25" height="25" src="/img/pause.svg"/>
+							<img class="icon min-w-[25px]" width="25" height="25" src="/img/pause.svg"/>
 						{/if}
 					</button>
-					<div class="flex justify-end flex-1">
+				</div>
+				<div class="flex justify-start flex-1">
+					<div class="flex justify-start flex-1">
 						<button on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="py-4 px-4 flex items-center text-white gap-2">
 							<img class="icon min-w-[25px]" width="25" height="25" src="/img/delete.svg"/>
 							<!-- <p class="text-[14px]">Delete</p> -->
@@ -867,9 +866,6 @@
 							<!-- <p class="text-[14px]">Insert</p> -->
 						</button>
 					</div>
-				</div>
-				<div class="flex justify-end flex-1">
-					
 				</div>
 			</div>
 			
