@@ -142,7 +142,7 @@
     const { clientWidth: workspaceWidth, clientHeight: workspaceHeight } = workspaceRef;
     
 		// Define padding value
-    const padding = 0 // Adjust this value as needed
+    const padding = 50 // Adjust this value as needed
   
     // Calculate the available space with padding
     const availableWidth = workspaceWidth - padding * 2
@@ -247,7 +247,7 @@
 		const touchType = e?.changedTouches?.[0]?.touchType || 'stylus'
 		debug = touchType
 
-		// if (touchType !== 'stylus') return
+		if (touchType !== 'stylus') return
 
 		const clientX = e?.clientX || e.touches[0].clientX
 		const clientY = e?.clientY || e.touches[0].clientY
@@ -476,7 +476,7 @@
     const playFrame = () => {
 			state.activeTimeline.col = frameIndex; // Update the active column
 			// frameIndex = (frameIndex + 1) % state.timeline[0].length; // Move to the next frame or loop back to the start
-			frameIndex = (frameIndex + 1) % 6; // Move to the next frame or loop back to the start
+			frameIndex = (frameIndex + 1) % 12; // Move to the next frame or loop back to the start
 			setActiveTimeline(state.activeTimeline.row, frameIndex, true)
 
 			// Stop if no frames exist after looping back to the start
