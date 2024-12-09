@@ -13,6 +13,7 @@
 	}
 	
 	const DPR = window.devicePixelRatio || 1
+	const HISTORY_LIMIT = 50
 
 	const canvasToBlob = (blobCanvas, format = "image/png", quality = 1.0) =>
 		new Promise((resolve, reject) =>
@@ -74,6 +75,7 @@
 			.fill(null)
 			.map(() => Array(100).fill(null)), // 100 columns (frames) per row
 		isPlaying: false,
+		isDrawing: false,
 		frameRate: 12,
 		workspace: {
       scale: 1,
@@ -91,7 +93,11 @@
     },
 		onionSkinEnabled: true,
 		onionSkinFramesAfter: 2,
-		onionSkinFramesBefore: 2
+		onionSkinFramesBefore: 2,
+
+		history: [],
+    historyIndex: -1,
+    historyRef: null,
 	};
 
 	onMount(async () => {
@@ -117,12 +123,12 @@
 		
 		const stopAnimationOnVisibilityChange = () => {
 			if (document.hidden && state.isPlaying) {
-					stopAnimation(); // Pause animation when the tab becomes hidden
+				stopAnimation(); // Pause animation when the tab becomes hidden
 			}
 		};
 
 		const stopAnimationOnUnload = () => {
-				stopAnimation(); // Ensure animation is stopped on page unload
+			stopAnimation(); // Ensure animation is stopped on page unload
 		};
 
 		// Attach both events
@@ -133,6 +139,36 @@
 			scaleAndCenterCanvas()
 		}, 0)
 	});
+
+	// UNDO & REDO
+
+	const undo = () => {
+    if (state.historyIndex >= 0) {
+      state.history[state.historyIndex].undo() // Execute the current item
+      state.historyIndex -= 1 // Move the index back
+
+    }
+  }
+
+  const redo = () => {
+    if (state.historyIndex < state.history.length - 1) {
+      state.historyIndex += 1 // Move the index forward
+      state.history[state.historyIndex].redo() // Execute the current item
+
+    }
+  }
+
+  const saveToHistory = (func) => {
+    if (state.historyIndex < state.history.length - 1) {
+      state.history = state.history.slice(0, state.historyIndex + 1)
+    }
+
+    state.history.push(func)
+    if (state.history.length > HISTORY_LIMIT) state.history.shift()
+    state.historyIndex = state.history.length - 1
+
+
+  }
 	
 	// WORKSPACE
 
@@ -142,7 +178,7 @@
     const { clientWidth: workspaceWidth, clientHeight: workspaceHeight } = workspaceRef;
     
 		// Define padding value
-    const padding = 50 // Adjust this value as needed
+    const padding = 100 // Adjust this value as needed
   
     // Calculate the available space with padding
     const availableWidth = workspaceWidth - padding * 2
@@ -207,6 +243,111 @@
 		}
 	}
 
+	const handleTransformCanvasStart = (e) => {
+    e.preventDefault()
+
+    const { left, top } = workspaceRef.getBoundingClientRect()
+    const touch1 = e.touches[0]
+    const touch2 = e.touches[1]
+    const offsetX1 = touch1.clientX - left
+    const offsetY1 = touch1.clientY - top
+    const offsetX2 = touch2.clientX - left
+    const offsetY2 = touch2.clientY - top
+    
+    const initialTouchDistance = Math.hypot(offsetX2 - offsetX1, offsetY2 - offsetY1)
+    const initialTouchAngle = Math.atan2(offsetY2 - offsetY1, offsetX2 - offsetX1)
+    const initialTouchMidpoint = {
+        x: (offsetX1 + offsetX2) / 2,
+        y: (offsetY1 + offsetY2) / 2
+    }
+
+    // Set initial values in the workspace state
+    state.workspace.initialTouchDistance = initialTouchDistance
+    state.workspace.initialTouchAngle = initialTouchAngle
+    state.workspace.initialTouchMidpoint = initialTouchMidpoint
+    state.workspace.startingScale = state.workspace.scale
+    state.workspace.previousMidpoint = initialTouchMidpoint // Save the initial midpoint
+    state.workspace.previousAngle = initialTouchAngle // Save the initial anglehttp:
+  }
+
+  const handleTransformCanvasMove = (e) => {
+    state.workspace.transformDelta += 1
+
+    const { left, top } = workspaceRef.getBoundingClientRect()
+    const touch1 = e.touches[0]
+    const touch2 = e.touches[1]
+    const offsetX1 = touch1.clientX - left
+    const offsetY1 = touch1.clientY - top
+    const offsetX2 = touch2.clientX - left
+    const offsetY2 = touch2.clientY - top
+
+    const currentTouchDistance = Math.hypot(offsetX2 - offsetX1, offsetY2 - offsetY1)
+    const currentMidpoint = {
+      x: (offsetX1 + offsetX2) / 2,
+      y: (offsetY1 + offsetY2) / 2,
+    }
+    const { scale, translate, rotate } = state.workspace
+
+    // Calculate new scale
+    const deltaScale = currentTouchDistance / state.workspace.initialTouchDistance
+    let newScale = Math.max(0.2, Math.min(2, state.workspace.startingScale * deltaScale))
+
+    // Apply a damping factor to smooth the scaling
+    const DAMPING_FACTOR = 0.1 // You can adjust this value
+    newScale = scale * (1 - DAMPING_FACTOR) + newScale * DAMPING_FACTOR
+
+    const canvasMidpointBeforeScaling = {
+      x: (currentMidpoint.x - translate.x) / scale,
+      y: (currentMidpoint.y - translate.y) / scale,
+    }
+
+    // Calculate the position of the midpoint in the canvas coordinate system after scaling
+    const canvasMidpointAfterScaling = {
+      x: canvasMidpointBeforeScaling.x * newScale,
+      y: canvasMidpointBeforeScaling.y * newScale,
+    }
+
+    const deltaMovement = {
+      x: currentMidpoint.x - state.workspace.previousMidpoint.x,
+      y: currentMidpoint.y - state.workspace.previousMidpoint.y,
+    }
+
+    // Adjust the translation to keep the midpoint fixed during scaling
+    let newTranslate = {
+      x: currentMidpoint.x - canvasMidpointAfterScaling.x,
+      y: currentMidpoint.y - canvasMidpointAfterScaling.y,
+    }
+
+    // Calculate rotation
+    const currentAngle = Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX)
+    const deltaRotate = currentAngle - state.workspace.previousAngle
+    const newRotate = rotate + (deltaRotate * (180 / Math.PI)) // Convert to degrees
+
+    // Adjust translation to keep the midpoint fixed during rotation
+    const radians = deltaRotate
+    const sin = Math.sin(radians)
+    const cos = Math.cos(radians)
+
+    const dx = currentMidpoint.x - newTranslate.x
+    const dy = currentMidpoint.y - newTranslate.y
+
+    newTranslate = {
+      x: currentMidpoint.x - (dx * cos - dy * sin) + deltaMovement.x,
+      y: currentMidpoint.y - (dx * sin + dy * cos) + deltaMovement.y,
+    }
+
+    // Update state with the new scale, translation, and rotation
+    state.workspace.scale = newScale
+    state.workspace.translate = newTranslate
+    state.workspace.rotate = newRotate
+
+    // Update the previous midpoint and initial touches for the next touch move event
+    state.workspace.previousMidpoint = currentMidpoint
+    state.workspace.previousAngle = currentAngle // Update the previous angle
+
+
+  }
+
 	// GESTURE / DRAW EVENTS
 
 	const processFrame = async () => {
@@ -238,27 +379,54 @@
     }
 	}
 
-	const onPointerStart = (e) => {
+	const screenToCanvasCoordinates = (screenX, screenY) => {
+    const { scale, translate, rotate } = state.workspace;
+    const { left, top } = workspaceRef.getBoundingClientRect();
+  
+    // Adjust screen coordinates to account for the container's position
+    const offsetX = (screenX * DPR) - left;
+    const offsetY = (screenY * DPR) - top;
+  
+    // Translate coordinates
+    const translatedX = offsetX - (translate.x * DPR);
+    const translatedY = offsetY - (translate.y * DPR);
+
+    // Rotate coordinates back
+    const radians = (rotate * Math.PI) / 180;
+    const cos = Math.cos(-radians);
+    const sin = Math.sin(-radians);
+    const rotatedX = translatedX * cos - translatedY * sin;
+    const rotatedY = translatedX * sin + translatedY * cos;
+  
+    // Scale coordinates back
+    const canvasX = rotatedX / scale;
+    const canvasY = rotatedY / scale;
+  
+    return { x: canvasX, y: canvasY };
+  };
+
+	const createHistoryAction = (canvasBlob) => {
+    return async () => {
+      const canvasImage = new Image();
+      canvasImage.src = URL.createObjectURL(canvasBlob);
+      canvasImage.onload = () => {
+        ctx.globalCompositeOperation = 'source-over'
+        ctx.clearRect(0, 0, canvas.width * DPR, canvas.height * DPR);
+        ctx.drawImage(canvasImage, 0, 0);
+      };
+    };
+  };
+
+	const onDrawStart = async (normalizedX, normalizedY) => {
 		// direct for touch
 		// stylus for pencil
 
-		if (state.isPlaying) return
-		
-		const touchType = e?.changedTouches?.[0]?.touchType || 'stylus'
-		debug = touchType
-
-		if (touchType !== 'stylus') return
-
-		const clientX = e?.clientX || e.touches[0].clientX
-		const clientY = e?.clientY || e.touches[0].clientY
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-
-    const normalizedX = (clientX - rect.left) * scaleX
-    const normalizedY = (clientY - rect.top) * scaleY
-
     isDrawing = true
+		state.isDrawing = true
+
+		canvasToBlob(canvas).then((canvasBlob) => {
+			state.historyRef = createHistoryAction(canvasBlob);
+    });
 
 		// Begin a new path on the canvas
 		ctx.beginPath()
@@ -275,28 +443,28 @@
 		ctx.stroke()
 	}
 
-	const onPointerMove = (e) => {
+	const onDrawMove = (normalizedX, normalizedY) => {
 		if (state.isPlaying) return
     if (!isDrawing) return
-
-		const clientX = e?.clientX || e.touches[0].clientX
-		const clientY = e?.clientY || e.touches[0].clientY
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
-    const normalizedX = (clientX - rect.left) * scaleX;
-    const normalizedY = (clientY - rect.top) * scaleY;
 
     // Draw a line from the last point to the current point
     ctx.lineTo(normalizedX, normalizedY);
     ctx.stroke();
 	}
 
-	const onPointerEnd = async (e) => {
+	const onDrawEnd = async (e) => {
     if (!isDrawing) return
     isDrawing = false
+		state.isDrawing = false
     ctx.closePath()
+
+		canvasToBlob(canvas).then((canvasBlob) => {
+			saveToHistory({
+				undo: state.historyRef,
+				redo: createHistoryAction(canvasBlob),
+			})
+		})
+
 		await processFrame()
 	}
 	
@@ -689,14 +857,14 @@
 	let startTouchY = 0;
 	const SCROLL_THRESHOLD = 10; // Adjust the threshold as needed
 
-	const handleTouchStart = (event) => {
+	const handleTimelineTouchStart = (event) => {
 		// Record the initial touch position
 		startTouchX = event?.clientX || event.touches[0].clientX;
 		startTouchY = event?.clientY || event.touches[0].clientY;
 		isScrolling = false; // Reset scrolling flag
 	}
 
-	const handleTouchMove = (event) => {
+	const handleTimelineTouchMove = (event) => {
 		const touchX = event?.clientX || event.touches[0].clientX;
 		const touchY = event?.clientY || event.touches[0].clientY;
 
@@ -710,7 +878,7 @@
 		}
 	}
 
-	const handleTouchEnd = (event, cellIndex) => {
+	const handleTimelineTouchEnd = (event, cellIndex) => {
 		if (isScrolling) return // Touchend ignored due to scroll-like movement
 
 		if (event.target.dataset?.cellindex) {
@@ -718,6 +886,80 @@
 			setActiveTimeline(state.activeTimeline.row, cellIndex, true)
 		}
 	}
+
+	// EVENT HANDLERS
+
+	const handleMouseDown = async (e) => {
+    e.preventDefault()
+		
+		if (state.isPlaying) return
+		
+		const touchType = e?.changedTouches?.[0]?.touchType || 'stylus'
+		debug = touchType
+
+		if (touchType !== 'stylus') return
+
+		const { x, y } = screenToCanvasCoordinates(e.clientX, e.clientY)
+    onDrawStart(x, y)
+  }
+
+  const handleMouseMove = (e) => {
+    e.preventDefault()
+    const { x, y } = screenToCanvasCoordinates(e.clientX, e.clientY)
+    onDrawMove(x, y, e)
+  }
+
+  const handleMouseUp = (e) => {
+    e.preventDefault()
+		onDrawEnd()
+  }
+
+	const handleTouchStart = (e) => {
+    e.preventDefault()
+
+    state.workspace.touchCount = e.touches.length
+
+    if (state.workspace.touchCount === 2) {
+      handleTransformCanvasStart(e)
+    } else if (e.touches[0].touchType === 'stylus') {
+      const touch = e.touches[0]
+      const { x, y } = screenToCanvasCoordinates(touch.clientX, touch.clientY)
+      onDrawStart(x, y)
+    }
+  }
+
+  const handleTouchMove = (e) => {
+    e.preventDefault()
+    if (state.workspace.touchCount === 2) {
+      handleTransformCanvasMove(e)
+    } else if (e.touches[0].touchType === 'stylus' && state.isDrawing) {
+      const touch = e.touches[0]
+      const { x, y } = screenToCanvasCoordinates(touch.clientX, touch.clientY)
+      onDrawMove(x, y, e)
+    }
+  }
+
+  const handleTouchEnd = (e) => {
+    e.preventDefault()
+
+    if (state.workspace.touchCount === 3) {
+      state.workspace.touchAction = 'redo'
+      state.workspace.touchCount = 0
+    } else if (state.workspace.touchCount === 2 && state.workspace.transformDelta < 3) {
+      state.workspace.touchAction = 'undo'
+      state.workspace.touchCount = 0
+    } else
+    if (e.changedTouches[0].touchType === 'stylus' && state.isDrawing) {
+      onDrawEnd()
+    }
+
+    if (e.touches.length === 0) {
+      if (state.workspace.touchAction === 'undo') undo()
+      if (state.workspace.touchAction === 'redo') redo()
+      state.workspace.touchAction = ''
+      state.workspace.transformDelta = 0
+    }
+  }
 </script>
 
 <main
@@ -738,13 +980,13 @@
 			<img class="icon" width="25" height="25" src="/img/back.svg"/>
 		</button>
 		<div class="flex justify-center relative w-[200px] overflow-hidden">
-			<!-- <button on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
-				<img class="icon" width="25" height="25" src="/img/delete.svg"/>
-			</button> -->
+			<button on:mouseup={() => { undo() }} on:touchend={() => { undo() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
+				<img class="icon" width="25" height="25" src="/img/undo.svg"/>
+			</button>
 			<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
-			<!-- <button on:mouseup={() => { insert() }} on:touchend={() => { insert() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
-				<img class="icon" width="25" height="25" src="/img/insert.svg"/>
-			</button> -->
+			<button on:mouseup={() => { redo() }} on:touchend={() => { redo() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
+				<img class="icon" width="25" height="25" src="/img/redo.svg"/>
+			</button>
 		</div>
 		<button
 			class="p-5 flex items-center justify-center"
@@ -762,12 +1004,12 @@
 	
 	<div
 		class="w-full h-full overflow-hidden relative touch-none"
-		on:touchstart={onPointerStart}
-		on:touchmove={onPointerMove}
-		on:touchend={onPointerEnd}
-		on:mousedown={onPointerStart}
-		on:mousemove={onPointerMove}
-		on:mouseup={onPointerEnd}
+		on:touchstart={handleTouchStart}
+		on:touchmove={handleTouchMove}
+		on:touchend={handleTouchEnd}
+		on:mousedown={handleMouseDown}
+		on:mousemove={handleMouseMove}
+		on:mouseup={handleMouseUp}
 		on:wheel={handleWheel}
 		bind:this={workspaceRef}
 	>
@@ -828,12 +1070,12 @@
 	</div>
 
 	<div
-		on:touchstart={handleTouchStart}
-		on:touchmove={handleTouchMove}
-		on:touchend={handleTouchEnd}
-		on:mousedown={handleTouchStart}
-		on:mousemove={handleTouchMove}
-		on:mouseup={handleTouchEnd}
+		on:touchstart={handleTimelineTouchStart}
+		on:touchmove={handleTimelineTouchMove}
+		on:touchend={handleTimelineTouchEnd}
+		on:mousedown={handleTimelineTouchStart}
+		on:mousemove={handleTimelineTouchMove}
+		on:mouseup={handleTimelineTouchEnd}
 		class="absolute w-full bottom-0 mb-9"
 	>
 		<div class="flex flex-col relative">
