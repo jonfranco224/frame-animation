@@ -98,6 +98,8 @@
 		history: [],
     historyIndex: -1,
     historyRef: null,
+
+		activeTool: 'pencil'
 	};
 
 	onMount(async () => {
@@ -134,6 +136,10 @@
 		// Attach both events
 		document.addEventListener('visibilitychange', stopAnimationOnVisibilityChange);
 		window.addEventListener('beforeunload', stopAnimationOnUnload);
+
+		window.addEventListener('beforeunload', (event) => {
+			event.returnValue = `Are you sure you want to leave? This alpha preview does not include saving.`;
+		});
 
 		setTimeout(() => {
 			scaleAndCenterCanvas()
@@ -421,6 +427,8 @@
 		// direct for touch
 		// stylus for pencil
 
+		ctx.globalCompositeOperation = state.activeTool === 'eraser' ? 'destination-out' : 'source-over'
+
     isDrawing = true
 		state.isDrawing = true
 
@@ -436,7 +444,7 @@
 		ctx.lineCap = "round" // Round line caps
 		ctx.lineJoin = "round" // Round line caps
 		ctx.strokeStyle = "black"
-		ctx.lineWidth = 15
+		ctx.lineWidth = state.activeTool === 'pencil'? 15 : 30
 
 		// Draw a point immediately on pointer down
 		ctx.lineTo(normalizedX, normalizedY)
@@ -469,6 +477,8 @@
 	}
 	
 	// TIMELINE - EDITING
+
+	let timelineIsScrolling = false;
 
 	const printColumn = async () => {
     offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height)
@@ -503,6 +513,11 @@
 
 	const remove = () => {
 		if (state.isPlaying) return
+
+		if (window.confirm("Are you sure you want to delete this frame?")) {
+		} else {
+			return
+		}
 
     const row = [...state.timeline[state.activeTimeline.row]] // Create a shallow copy
     const currCol = state.activeTimeline.col
@@ -707,6 +722,43 @@
 		}
 	};
 
+	let timelineStartTouchX = 0;
+	let timelineStartTouchY = 0;
+	const SCROLL_THRESHOLD = 10; // Adjust the threshold as needed
+
+	const handleTimelineTouchStart = (event) => {
+		// Record the initial touch position
+		timelineStartTouchX = event?.clientX || event.touches[0].clientX;
+		timelineStartTouchY = event?.clientY || event.touches[0].clientY;
+		timelineIsScrolling = false; // Reset scrolling flag
+	}
+
+	const handleTimelineTouchMove = (event) => {
+		const touchX = event?.clientX || event.touches[0].clientX;
+		const touchY = event?.clientY || event.touches[0].clientY;
+
+		// Calculate the movement
+		const deltaX = Math.abs(touchX - timelineStartTouchX);
+		const deltaY = Math.abs(touchY - timelineStartTouchY);
+
+		// If movement exceeds threshold, treat as scroll
+		if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
+			timelineIsScrolling = true;
+		}
+	}
+
+	const handleTimelineTouchEnd = (event, cellIndex) => {
+		if (timelineIsScrolling) {
+			timelineIsScrolling = false;
+			return // Touchend ignored due to scroll-like movement
+		} 
+
+		if (event.target.dataset?.cellindex) {
+			const cellIndex = parseInt(event.target.dataset?.cellindex)
+			setActiveTimeline(state.activeTimeline.row, cellIndex, true)
+		}
+	}
+
 	// TIMELINE - ONION SKINNING
 
 	const updateOnionSkinCanvases = async () => {
@@ -852,40 +904,8 @@
     lastTap = currentTime;
   }
 
-	let isScrolling = false;
-	let startTouchX = 0;
-	let startTouchY = 0;
-	const SCROLL_THRESHOLD = 10; // Adjust the threshold as needed
-
-	const handleTimelineTouchStart = (event) => {
-		// Record the initial touch position
-		startTouchX = event?.clientX || event.touches[0].clientX;
-		startTouchY = event?.clientY || event.touches[0].clientY;
-		isScrolling = false; // Reset scrolling flag
-	}
-
-	const handleTimelineTouchMove = (event) => {
-		const touchX = event?.clientX || event.touches[0].clientX;
-		const touchY = event?.clientY || event.touches[0].clientY;
-
-		// Calculate the movement
-		const deltaX = Math.abs(touchX - startTouchX);
-		const deltaY = Math.abs(touchY - startTouchY);
-
-		// If movement exceeds threshold, treat as scroll
-		if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
-			isScrolling = true;
-		}
-	}
-
-	const handleTimelineTouchEnd = (event, cellIndex) => {
-		if (isScrolling) return // Touchend ignored due to scroll-like movement
-
-		if (event.target.dataset?.cellindex) {
-			const cellIndex = parseInt(event.target.dataset?.cellindex)
-			setActiveTimeline(state.activeTimeline.row, cellIndex, true)
-		}
-	}
+	
+	
 
 	// EVENT HANDLERS
 
@@ -968,7 +988,7 @@
 	on:touchend={(e) => e.preventDefault()}
 >
 	<div class="flex justify-between absolute z-10 w-full">
-		<button
+		<!-- <button
 			class="p-5 flex items-center justify-center"
 			on:mouseup="{() => {
 				
@@ -978,14 +998,15 @@
 			}}"
 		>
 			<img class="icon" width="25" height="25" src="/img/back.svg"/>
-		</button>
+		</button> -->
+		<div></div>
 		<div class="flex justify-center relative w-[200px] overflow-hidden">
-			<button on:mouseup={() => { undo() }} on:touchend={() => { undo() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
-				<img class="icon" width="25" height="25" src="/img/undo.svg"/>
+			<button on:mouseup={() => { state.activeTool = 'pencil' }} on:touchend={() => { state.activeTool = 'pencil' }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
+				<img class="icon" style="opacity: {state.activeTool !== 'pencil' ? '0.5' : '1'};" width="25" height="25" src="/img/pencil.svg"/>
 			</button>
 			<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
-			<button on:mouseup={() => { redo() }} on:touchend={() => { redo() }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
-				<img class="icon" width="25" height="25" src="/img/redo.svg"/>
+			<button style="opacity: {state.activeTool !== 'eraser' ? '0.5' : '1'};" on:mouseup={() => { state.activeTool = 'eraser' }} on:touchend={() => { state.activeTool = 'eraser' }} class="px-3 w-full max-w-[200px] flex items-center justify-center">
+				<img class="icon" width="25" height="25" src="/img/eraser.svg"/>
 			</button>
 		</div>
 		<button
@@ -1097,20 +1118,17 @@
 					</button>
 				</div>
 				<div class="flex justify-start flex-1">
-					<div class="flex justify-start flex-1">
-						<button on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="py-4 px-4 flex items-center text-white gap-2">
-							<img class="icon min-w-[25px]" width="25" height="25" src="/img/delete.svg"/>
-							<!-- <p class="text-[14px]">Delete</p> -->
-						</button>
+					<div class="flex justify-end flex-1">
 						<!-- <div class="w-[1px] bg-[purple] absolute h-[1000px] left-[calc(50%-1px)]"></div> -->
-						<button on:mouseup={() => { insert() }} on:touchend={() => { insert() }} class="px-4 flex items-center text-white gap-2">
+						<button title="Insert Frame" on:mouseup={() => { insert() }} on:touchend={() => { insert() }} class="px-4 flex items-center text-white gap-2">
 							<img class="icon min-w-[25px]" width="25" height="25" src="/img/insert.svg"/>
-							<!-- <p class="text-[14px]">Insert</p> -->
+						</button>
+						<button title="Delete Frame" on:mouseup={() => { remove() }} on:touchend={() => { remove() }} class="py-4 px-4 flex items-center text-white gap-2">
+							<img class="icon min-w-[25px]" width="25" height="25" src="/img/delete.svg"/>
 						</button>
 					</div>
 				</div>
 			</div>
-			
 			<div
 				bind:this={timelineRef}
 				on:scroll={handleTimelineScroll}
@@ -1118,7 +1136,6 @@
 				<!-- blue line -->
 				<!-- <div style="left: 50%" class="z-50 w-[2px] h-[56px] bg-[rgb(52,152,219)] fixed pointer-events-none" /> -->
 				<!-- button row -->
-				
 				<div class="relative min-w-max pl-[calc(50%+1px)] pr-[calc(50%)]">
 					<div class="flex flex-col gap-[1px]">
 						{#each state.timeline as row, rowIndex}
