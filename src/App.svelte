@@ -941,7 +941,7 @@
 
     if (state.workspace.touchCount === 2) {
       handleTransformCanvasStart(e)
-    } else if (e.touches[0].touchType === 'stylus') {
+    } else if (e.touches[0].touchType === 'direct') {
       const touch = e.touches[0]
       const { x, y } = screenToCanvasCoordinates(touch.clientX, touch.clientY)
       onDrawStart(x, y)
@@ -952,7 +952,7 @@
     e.preventDefault()
     if (state.workspace.touchCount === 2) {
       handleTransformCanvasMove(e)
-    } else if (e.touches[0].touchType === 'stylus' && state.isDrawing) {
+    } else if (e.touches[0].touchType === 'direct' && state.isDrawing) {
       const touch = e.touches[0]
       const { x, y } = screenToCanvasCoordinates(touch.clientX, touch.clientY)
       onDrawMove(x, y, e)
@@ -969,7 +969,7 @@
       state.workspace.touchAction = 'undo'
       state.workspace.touchCount = 0
     } else
-    if (e.changedTouches[0].touchType === 'stylus' && state.isDrawing) {
+    if (e.changedTouches[0].touchType === 'direct' && state.isDrawing) {
       onDrawEnd()
     }
 
